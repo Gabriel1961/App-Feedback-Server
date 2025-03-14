@@ -9,26 +9,28 @@ const crypto = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT;
-const DATA_FILE = "bugs.json";
-const SUBMISSION_COUNT_FILE = "submissionCounts.json";
+const STORAGE_DIR = "storage/"
+const DATA_FILE = STORAGE_DIR + "bugs.json";
+const SUBMISSION_COUNT_FILE = STORAGE_DIR + "submissionCounts.json";
 const PASSWORD = process.env.INDEX_PASSWORD; // Define your password here
 const MAX_STORAGE_SIZE = 1024 * 1024 * 1024; // 1GB in bytes
-const UPLOADS_DIR = path.join(__dirname, "uploads");
+const UPLOADS_DIR_REL_PATH = STORAGE_DIR + "uploads/"
+const UPLOADS_DIR_FULL_PATH = path.join(__dirname, UPLOADS_DIR_REL_PATH);
 
 // Middleware
 app.use(express.json());
 app.use(cors());
-app.use("/uploads", express.static(UPLOADS_DIR));
+app.use("/storage/uploads", express.static(UPLOADS_DIR_REL_PATH));
 
 // Ensure uploads directory exists
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR);
+if (!fs.existsSync(UPLOADS_DIR_REL_PATH)) {
+  fs.mkdirSync(UPLOADS_DIR_REL_PATH, {recursive: true});
 }
 
 // Setup storage for uploaded images
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, UPLOADS_DIR);
+    cb(null, UPLOADS_DIR_REL_PATH);
   },
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
@@ -94,12 +96,28 @@ const processImage = async (filePath) => {
       .jpeg({ quality: 90 })
       .toFile(tempOutputPath);
     
-    // Delete original file after successful processing
-    fs.unlinkSync(filePath);
+    // Try to delete original file after successful processing
+    try {
+      if (fs.existsSync(filePath)) {
+        // Add a small delay to ensure file isn't locked
+        await new Promise(resolve => setTimeout(resolve, 100));
+        fs.unlinkSync(filePath);
+      }
+    } catch (unlinkError) {
+      console.warn("Could not delete original file:", unlinkError.message);
+      // Continue execution even if delete fails
+    }
     
     // Rename the temp file to the desired output path if needed
     const finalOutputPath = filePath.replace(/\.[^/.]+$/, ".jpg");
-    fs.renameSync(tempOutputPath, finalOutputPath);
+    
+    // Try to rename, but if it fails due to permissions, just use the temp file
+    try {
+      fs.renameSync(tempOutputPath, finalOutputPath);
+    } catch (renameError) {
+      console.warn("Could not rename temp file:", renameError.message);
+      return tempOutputPath; // Return the temp path if rename fails
+    }
     
     return finalOutputPath;
   } catch (error) {
@@ -142,7 +160,7 @@ const getFileInfoWithDate = (directoryPath) => {
 
 // Function to clean up old files when storage exceeds limit
 const cleanupStorage = () => {
-  const currentSize = getDirectorySize(UPLOADS_DIR);
+  const currentSize = getDirectorySize(UPLOADS_DIR_REL_PATH);
   
   // If current size is below the limit, do nothing
   if (currentSize < MAX_STORAGE_SIZE) {
@@ -152,7 +170,7 @@ const cleanupStorage = () => {
   console.log(`Storage exceeds limit (${(currentSize / 1024 / 1024).toFixed(2)}MB). Cleaning up...`);
   
   // Get all files with their creation dates
-  const files = getFileInfoWithDate(UPLOADS_DIR);
+  const files = getFileInfoWithDate(UPLOADS_DIR_REL_PATH);
   
   // Sort by creation time (oldest first)
   files.sort((a, b) => a.createdAt - b.createdAt);
@@ -183,14 +201,14 @@ const cleanupStorage = () => {
   let modified = false;
   
   // Get current list of files after cleanup
-  const remainingFiles = new Set(fs.readdirSync(UPLOADS_DIR).map(file => `/uploads/${file}`));
+  const remainingFiles = new Set(fs.readdirSync(UPLOADS_DIR_REL_PATH).map(file => path.join(UPLOADS_DIR_REL_PATH, file)));
   
   bugReports.forEach(bug => {
     if (bug.photos && bug.photos.length > 0) {
       const validPhotos = bug.photos.filter(photo => {
         // Extract the filename from the path
         const fileName = path.basename(photo);
-        return remainingFiles.has(`/uploads/${fileName}`);
+        return remainingFiles.has(path.join(UPLOADS_DIR_REL_PATH, fileName));
       });
       
       if (validPhotos.length !== bug.photos.length) {
@@ -208,7 +226,7 @@ const cleanupStorage = () => {
 
 // Endpoint to submit bug reports
 app.post("/report", upload.array("photos", 3), async (req, res) => {
-  const { title, description } = req.body;
+  const { title, description, logs } = req.body;
   const userIp = req.ip; // Get the user's IP address
 
   // Check for empty fields
@@ -217,7 +235,7 @@ app.post("/report", upload.array("photos", 3), async (req, res) => {
     if (req.files && req.files.length > 0) {
       req.files.forEach(file => {
         try {
-          fs.unlinkSync(path.join(UPLOADS_DIR, file.filename));
+          fs.unlinkSync(path.join(UPLOADS_DIR_REL_PATH, file.filename));
         } catch (error) {
           console.error("Error deleting file:", error);
         }
@@ -235,7 +253,7 @@ app.post("/report", upload.array("photos", 3), async (req, res) => {
     if (req.files && req.files.length > 0) {
       req.files.forEach(file => {
         try {
-          fs.unlinkSync(path.join(UPLOADS_DIR, file.filename));
+          fs.unlinkSync(path.join(UPLOADS_DIR_REL_PATH, file.filename));
         } catch (error) {
           console.error("Error deleting file:", error);
         }
@@ -252,7 +270,7 @@ app.post("/report", upload.array("photos", 3), async (req, res) => {
     if (req.files && req.files.length > 0) {
       req.files.forEach(file => {
         try {
-          fs.unlinkSync(path.join(UPLOADS_DIR, file.filename));
+          fs.unlinkSync(path.join(UPLOADS_DIR_REL_PATH, file.filename));
         } catch (error) {
           console.error("Error deleting file:", error);
         }
@@ -269,8 +287,8 @@ app.post("/report", upload.array("photos", 3), async (req, res) => {
   if (req.files && req.files.length > 0) {
     for (const file of req.files) {
       try {
-        const newPhotoPath = await processImage(path.join(UPLOADS_DIR, file.filename)); // Process image
-        photoPaths.push(`/uploads/${path.basename(newPhotoPath)}`);
+        const newPhotoPath = await processImage(path.join(UPLOADS_DIR_REL_PATH, file.filename)); // Process image
+        photoPaths.push(path.relative("", newPhotoPath));
       } catch (error) {
         console.error("Error processing image:", error);
       }
@@ -281,6 +299,7 @@ app.post("/report", upload.array("photos", 3), async (req, res) => {
     id: Date.now(),
     title: title.trim(),
     description: description.trim(),
+    logs: logs,
     photos: photoPaths,
     timestamp: new Date(),
     reportHash: generateReportHash(title, description)
@@ -319,10 +338,10 @@ app.get("/reports", (req, res) => {
 });
 
 // Password-protected route for serving index.html
-app.get("/", (req, res) => {
+app.get("/bugReports", (req, res) => {
   // Check if the password parameter matches the correct password
   if (req.query.password === PASSWORD) {
-    res.sendFile(path.join(__dirname, "index.html"));
+    res.sendFile(path.join(__dirname, "pages/bugReports.html"));
   } else {
     // If password is incorrect or not provided, send an access denied response
     res.status(401).send("Access Denied: Invalid password");
@@ -335,14 +354,14 @@ app.get("/storage-status", (req, res) => {
     return res.status(401).send("Access Denied: Invalid password");
   }
   
-  const currentSize = getDirectorySize(UPLOADS_DIR);
+  const currentSize = getDirectorySize(UPLOADS_DIR_REL_PATH);
   const usedPercentage = (currentSize / MAX_STORAGE_SIZE) * 100;
   
   res.json({
     totalStorage: `${(MAX_STORAGE_SIZE / 1024 / 1024 / 1024).toFixed(2)} GB`,
     usedStorage: `${(currentSize / 1024 / 1024).toFixed(2)} MB`,
     usedPercentage: `${usedPercentage.toFixed(2)}%`,
-    fileCount: fs.readdirSync(UPLOADS_DIR).length
+    fileCount: fs.readdirSync(UPLOADS_DIR_REL_PATH).length
   });
 });
 
@@ -351,7 +370,7 @@ app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
   
   // Check storage on startup
-  const currentSize = getDirectorySize(UPLOADS_DIR);
+  const currentSize = getDirectorySize(UPLOADS_DIR_REL_PATH);
   console.log(`Current storage usage: ${(currentSize / 1024 / 1024).toFixed(2)}MB / ${MAX_STORAGE_SIZE / 1024 / 1024}MB`);
   
   // Clean up storage if needed

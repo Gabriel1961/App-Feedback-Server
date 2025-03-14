@@ -45,6 +45,10 @@
 				border-radius: 4px;
 				cursor: pointer;
 			}
+			.bug-area {
+				field-sizing: content;
+				max-height: 500px;
+			}
 			.bug-report {
 				background-color: white;
 				border-radius: 8px;
@@ -372,6 +376,7 @@
           <div class="bug-images">
             ${bug.photos.map((photo) => `<img src="${photo}" alt="Bug screenshot">`).join("")}
           </div>
+          <textarea class="bug-area">${bug.logs}</textarea>
         `;
 
 					bugReportsContainer.appendChild(bugReport);
