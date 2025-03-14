@@ -78,17 +78,35 @@ const isDuplicateReport = (title, description, reports) => {
 
 // Helper function to process image
 const processImage = async (filePath) => {
-  const outputFilePath = filePath.replace(/\.[^/.]+$/, ".jpg"); // Convert to .jpg extension
-  await sharp(filePath)
-    .resize(2048, 2048, {
-      fit: "inside", // Resize only if the image exceeds 2048 in any dimension
-      withoutEnlargement: true, // Prevent enlarging images smaller than 2048x2048
-    })
-    .jpeg({ quality: 90 }) // Convert to JPEG with 90 quality
-    .toFile(outputFilePath);
-
-  fs.unlinkSync(filePath); // Delete original file after processing
-  return outputFilePath; // Return the new image path
+  try {
+    // Generate a temporary output path with a different name
+    const tempOutputPath = path.join(
+      path.dirname(filePath),
+      `temp-${path.basename(filePath).replace(/\.[^/.]+$/, "")}.jpg`
+    );
+    
+    // Process the image to the temporary file
+    await sharp(filePath)
+      .resize(2048, 2048, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 90 })
+      .toFile(tempOutputPath);
+    
+    // Delete original file after successful processing
+    fs.unlinkSync(filePath);
+    
+    // Rename the temp file to the desired output path if needed
+    const finalOutputPath = filePath.replace(/\.[^/.]+$/, ".jpg");
+    fs.renameSync(tempOutputPath, finalOutputPath);
+    
+    return finalOutputPath;
+  } catch (error) {
+    console.error("Error in image processing:", error);
+    // Return the original file path if processing fails
+    return filePath;
+  }
 };
 
 // Helper function to calculate directory size
