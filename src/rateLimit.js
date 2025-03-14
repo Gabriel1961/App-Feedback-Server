@@ -1,0 +1,1 @@
+// make a rate limiter for each user ip for actions that have different names for instance: for "reportBug" the limit should be , "reportLogs"
