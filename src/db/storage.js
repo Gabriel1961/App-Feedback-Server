@@ -25,14 +25,21 @@ function ensureDirectoryExists(dir) {
 }
 
 // Paths for BugReports and Logs folders
-const BUG_REPORTS_DIR = path.join(__dirname, "Storage/BugReports");
-const LOGS_DIR = path.join(__dirname, "Storage/Logs");
+const BUG_REPORTS_DIR = path.join(process.cwd(), "/storage/bugReports");
+const LOGS_DIR = path.join(process.cwd(), "/storage/logs");
+
+if (!fs.existsSync(BUG_REPORTS_DIR)) {
+	fs.mkdirSync(BUG_REPORTS_DIR, { recursive: true });
+}
+if (!fs.existsSync(LOGS_DIR)) {
+	fs.mkdirSync(LOGS_DIR, { recursive: true });
+}
 
 ensureDirectoryExists(BUG_REPORTS_DIR);
 ensureDirectoryExists(LOGS_DIR);
 
-// Create a bug report
-function createBugReport(title, description, logs, photos, userIP) {
+// Try to create a bug report, checking for duplicates on the same day
+function tryCreateBugReport(title, description, logs, photos, userIP) {
 	const today = getTodayDate();
 	const filePath = path.join(BUG_REPORTS_DIR, `${today}.json`);
 
@@ -41,39 +48,48 @@ function createBugReport(title, description, logs, photos, userIP) {
 		reports = JSON.parse(fs.readFileSync(filePath, "utf-8"));
 	}
 
+	const reportHash = generateReportHash(title, description);
+
+	// Check if a report with the same hash already exists today
+	const isDuplicate = reports.some((report) => report.reportHash === reportHash);
+	if (isDuplicate) {
+		return [false, null]; // Duplicate found, do not add another report
+	}
+
 	const bugReport = {
 		id: Date.now(),
 		userIP: userIP,
 		title: title.trim(),
 		description: description.trim(),
 		logs: logs,
-		photos: photos,
+		photos: photos.map((photo) => {
+			let noBackslashes = photo.replaceAll("\\", "/");
+			let subs = noBackslashes.substring(noBackslashes.indexOf("/storage"));
+			return subs;
+		}),
 		timestamp: new Date(),
-		reportHash: generateReportHash(title, description),
+		reportHash: reportHash,
 	};
 
 	reports.push(bugReport);
 	fs.writeFileSync(filePath, JSON.stringify(reports, null, 2));
+	return [true, bugReport]; // Report successfully added
 }
 
 // Query bug reports by pages (sorted by date)
-function queryBugReportsByPage(page, pageSize) {
-	const files = fs.readdirSync(BUG_REPORTS_DIR).sort().reverse();
-	const allReports = [];
+function queryBugReportsByDay(date) {
+	const filePath = path.join(BUG_REPORTS_DIR, `${date}.json`);
 
-	files.forEach((file) => {
-		const filePath = path.join(BUG_REPORTS_DIR, file);
-		const reports = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-		allReports.push(...reports);
-	});
+	if (fs.existsSync(filePath)) {
+		return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+	}
 
-	const start = (page - 1) * pageSize;
-	const end = start + pageSize;
-	return allReports.slice(start, end);
+	return [];
 }
 
 // Search bug reports by content (title and description)
 function searchBugReports(query) {
+	const lowerCaseQuery = query.toLowerCase();
 	const files = fs.readdirSync(BUG_REPORTS_DIR);
 	const results = [];
 
@@ -82,7 +98,10 @@ function searchBugReports(query) {
 		const reports = JSON.parse(fs.readFileSync(filePath, "utf-8"));
 
 		reports.forEach((report) => {
-			if (report.title.includes(query) || report.description.includes(query)) {
+			if (
+				report.title.toLowerCase().includes(lowerCaseQuery) ||
+				report.description.toLowerCase().includes(lowerCaseQuery)
+			) {
 				results.push(report);
 			}
 		});
@@ -139,19 +158,81 @@ function queryLogsByDay(date) {
 function searchLogs(query) {
 	const files = fs.readdirSync(LOGS_DIR);
 	const results = [];
+	const lowerCaseQuery = query.toLowerCase();
 
 	files.forEach((file) => {
 		const filePath = path.join(LOGS_DIR, file);
 		const logs = JSON.parse(fs.readFileSync(filePath, "utf-8"));
 
 		logs.forEach((log) => {
-			if (log.title.includes(query) || log.trace.includes(query)) {
+			if (
+				log.title.toLowerCase().includes(lowerCaseQuery) ||
+				log.trace.toLowerCase().includes(lowerCaseQuery)
+			) {
 				results.push(log);
 			}
 		});
 	});
 
 	return results;
+}
+
+// Query bug reports with pagination
+function queryBugReportsPages(page = 1, reportsPerPage = 10) {
+	// Get all files and sort them by date (newest first)
+	const files = fs
+		.readdirSync(BUG_REPORTS_DIR)
+		.filter((file) => file.endsWith(".json"))
+		.sort((a, b) => {
+			// Compare dates in filenames (YYYY-MM-DD.json)
+			const dateA = a.split(".")[0];
+			const dateB = b.split(".")[0];
+			return dateB.localeCompare(dateA);
+		});
+
+	const totalFiles = files.length;
+	let reportsCount = 0;
+	let currentFile = 0;
+	const startIndex = (page - 1) * reportsPerPage;
+	const reports = [];
+
+	// Count total reports and collect needed reports
+	while (currentFile < totalFiles && reports.length < reportsPerPage) {
+		const filePath = path.join(BUG_REPORTS_DIR, files[currentFile]);
+		const fileReports = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+
+		// If we haven't reached the start index yet
+		if (reportsCount + fileReports.length <= startIndex) {
+			reportsCount += fileReports.length;
+			currentFile++;
+			continue;
+		}
+
+		// Calculate which reports we need from this file
+		const fileStartIndex = Math.max(0, startIndex - reportsCount);
+		const fileEndIndex = Math.min(
+			fileReports.length,
+			fileStartIndex + (reportsPerPage - reports.length)
+		);
+
+		reports.push(...fileReports.slice(fileStartIndex, fileEndIndex));
+		reportsCount += fileReports.length;
+		currentFile++;
+	}
+
+	// Calculate total reports and pages
+	const totalReports = files.reduce((total, file) => {
+		const filePath = path.join(BUG_REPORTS_DIR, file);
+		return total + JSON.parse(fs.readFileSync(filePath, "utf-8")).length;
+	}, 0);
+
+	return {
+		reports,
+		currentPage: page,
+		totalPages: Math.ceil(totalReports / reportsPerPage),
+		totalReports,
+		reportsPerPage,
+	};
 }
 
 // Remove bug reports by userIP
@@ -187,14 +268,14 @@ function removeLogsByUserIP(userIP) {
 }
 
 module.exports = {
-	createBugReport,
-	queryBugReportsByPage,
+	queryBugReportsByDay,
+	queryLogsByDay,
 	searchBugReports,
 	createLog,
-	queryLogsByDay,
+	tryCreateBugReport,
 	searchLogs,
-	generateReportHash,
-	generateHash,
-  removeLogsByUserIP,
-  removeBugReportsByUserIP
+	removeLogsByUserIP,
+	removeBugReportsByUserIP,
+	getTodayDate,
+	queryBugReportsPages
 };

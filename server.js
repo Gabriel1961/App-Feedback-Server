@@ -1,11 +1,4 @@
-// Require the constants from constants.js
 require("dotenv").config();
-const {
-	STORAGE_DIR,
-	UPLOADS_DIR_REL_PATH,
-	PASSWORD,
-	MAX_REPORTS_STORAGE_SIZE_GB,
-} = require("./src/constants");
 
 const express = require("express");
 const path = require("path");
@@ -15,23 +8,14 @@ const fs = require("fs");
 const app = express();
 const PORT = process.env.PORT;
 
-console.log(STORAGE_DIR);
-// Ensure storage directories exist
-if (!fs.existsSync(STORAGE_DIR)) {
-	fs.mkdirSync(STORAGE_DIR, { recursive: true });
-}
-
-console.log(UPLOADS_DIR_REL_PATH);
-if (!fs.existsSync(UPLOADS_DIR_REL_PATH)) {
-	fs.mkdirSync(UPLOADS_DIR_REL_PATH, { recursive: true });
-}
-
-const { bugReportRoutes, getDirectorySize, cleanupStorage } = require("./src/bugReports");
+const { PHOTOS_DIR, MAX_STORAGE_SIZE, getDirectorySize } = require("./src/db/imageStorage");
+const { bugReportRoutes } = require("./src/bugReports");
+const PASSWORD = process.env.INDEX_PASSWORD
 
 // Middleware
 app.use(express.json());
 app.use(cors());
-app.use("/storage/uploads", express.static(UPLOADS_DIR_REL_PATH));
+app.use("/storage/photos", express.static(PHOTOS_DIR));
 
 // Mount bug report routes
 app.use(bugReportRoutes);
@@ -50,16 +34,9 @@ app.get("/bugReports", (req, res) => {
 // Start the server
 app.listen(PORT, () => {
 	console.log(`Server running at http://localhost:${PORT}`);
-
-	// Check storage on startup and clean up if needed
-	const currentSize = getDirectorySize(UPLOADS_DIR_REL_PATH);
 	console.log(
-		`Current storage usage: ${(currentSize / 1024 / 1024).toFixed(
-			2
-		)}MB / ${MAX_REPORTS_STORAGE_SIZE_GB} GB`
+		`Current storage usage: ${(getDirectorySize(PHOTOS_DIR) / 1024 / 1024).toFixed(
+			1
+		)} MB / ${(MAX_STORAGE_SIZE/1028/1024/1024).toFixed(1)} GB`
 	);
-
-	if (currentSize > MAX_REPORTS_STORAGE_SIZE_GB) {
-		cleanupStorage();
-	}
 });

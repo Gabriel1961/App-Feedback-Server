@@ -3,565 +3,246 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Bug Report Tracker</title>
+		<title>Bug Reporting System</title>
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css"
+		/>
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css"
+		/>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+		<script defer src="script.js"></script>
 		<style>
-			body {
-				font-family: Arial, sans-serif;
-				max-width: 960px;
-				margin: 0 auto;
-				padding: 20px;
-				background-color: #f5f5f5;
-			}
-			h1 {
-				color: #333;
-				text-align: center;
-			}
-			.container {
-				display: flex;
-				flex-direction: column;
-				gap: 20px;
-			}
-			.header {
-				display: flex;
-				justify-content: space-between;
-				align-items: center;
-				margin-bottom: 20px;
-			}
-			.search-bar {
-				display: flex;
-				gap: 10px;
-			}
-			.search-bar input {
-				padding: 8px;
-				border: 1px solid #ddd;
-				border-radius: 4px;
-				width: 300px;
-			}
-			.search-bar button {
-				padding: 8px 16px;
-				background-color: #0066cc;
-				color: white;
-				border: none;
-				border-radius: 4px;
-				cursor: pointer;
-			}
-			.bug-area {
-				field-sizing: content;
-				max-height: 500px;
-			}
-			.bug-report {
-				background-color: white;
-				border-radius: 8px;
-				padding: 20px;
-				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-			}
-			.bug-title {
-				font-size: 18px;
-				font-weight: bold;
-				margin-bottom: 10px;
-			}
-			.bug-description {
-				margin-bottom: 15px;
-				color: #444;
-			}
-			.bug-timestamp {
-				color: #666;
-				font-size: 14px;
-				margin-bottom: 15px;
-			}
-			.bug-images {
-				display: flex;
-				gap: 10px;
-				overflow-x: auto;
-				padding-bottom: 10px;
-			}
-			.bug-images img {
-				max-width: 150px;
-				max-height: 150px;
-				border-radius: 4px;
-				object-fit: cover;
-				cursor: pointer; /* Add cursor pointer to indicate clickable */
-				transition: transform 0.2s; /* Add a smooth hover effect */
-			}
-			.bug-images img:hover {
-				transform: scale(1.05); /* Slight zoom on hover */
-			}
-			.pagination {
-				display: flex;
-				justify-content: center;
-				gap: 10px;
-				margin-top: 20px;
-			}
-			.pagination button {
-				padding: 8px 16px;
-				background-color: #f0f0f0;
-				border: 1px solid #ddd;
-				border-radius: 4px;
-				cursor: pointer;
-			}
-			.pagination button.active {
-				background-color: #0066cc;
-				color: white;
-			}
-			.pagination button:hover:not(.active) {
-				background-color: #e0e0e0;
-			}
-			.submit-button {
-				padding: 10px 20px;
-				background-color: #28a745;
-				color: white;
-				border: none;
-				border-radius: 4px;
-				cursor: pointer;
-				font-size: 16px;
-			}
-			.no-results {
-				text-align: center;
-				padding: 40px;
-				color: #666;
-			}
-			.loading {
-				text-align: center;
-				padding: 40px;
-				color: #666;
-			}
-
-			/* Image popup styles */
-			.image-popup-overlay {
-				display: none;
+			.modal {
+				display: none; /* Keep only this display property */
 				position: fixed;
-				top: 0;
+				z-index: 1000;
 				left: 0;
+				top: 0;
 				width: 100%;
 				height: 100%;
-				background-color: rgba(0, 0, 0, 0.85);
-				z-index: 1000;
-				align-items: center;
+				background: rgba(0, 0, 0, 0.8);
 				justify-content: center;
+				align-items: center;
 			}
-
-			.image-popup-content {
-				position: relative;
+			.modal img {
 				max-width: 90%;
 				max-height: 90%;
-				display: flex;
-				justify-content: center;
-				align-items: center;
-			}
-
-			.image-popup-content img {
-				max-width: 100%;
-				max-height: 90vh;
-				object-fit: contain;
-				border-radius: 4px;
-				box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-			}
-
-			.image-popup-close {
-				position: absolute;
-				top: -40px;
-				right: 0;
-				background-color: white;
-				color: #333;
-				border: none;
-				border-radius: 50%;
-				width: 36px;
-				height: 36px;
-				font-size: 18px;
-				cursor: pointer;
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-			}
-
-			.image-popup-close:hover {
-				background-color: #f0f0f0;
 			}
 		</style>
 	</head>
-	<body>
-		<h1>Bug Report Tracker</h1>
-
-		<div class="container">
-			<div class="header">
-				<div class="search-bar">
-					<input type="text" id="searchInput" placeholder="Search by title or description..." />
-					<button id="searchButton">Search</button>
-				</div>
-				<button class="submit-button" id="submitBugButton">Submit New Bug</button>
+	<body class="bg-gray-100 min-h-screen">
+		<nav class="bg-blue-600 text-white shadow-lg">
+			<div class="container mx-auto px-4 py-3 flex justify-between items-center">
+				<h1 class="text-xl font-bold">Bug Reporting System</h1>
 			</div>
+		</nav>
 
-			<div id="bugReportsContainer"></div>
-
-			<div class="pagination" id="pagination"></div>
-		</div>
-
-		<!-- Bug Report Form Modal -->
-		<div
-			id="bugFormModal"
-			style="
-				display: none;
-				position: fixed;
-				top: 0;
-				left: 0;
-				width: 100%;
-				height: 100%;
-				background-color: rgba(0, 0, 0, 0.5);
-				z-index: 100;
-			"
-		>
-			<div
-				style="
-					background-color: white;
-					max-width: 600px;
-					margin: 50px auto;
-					padding: 20px;
-					border-radius: 8px;
-				"
-			>
-				<h2>Submit Bug Report</h2>
-				<form id="bugForm">
-					<div style="margin-bottom: 15px">
-						<label for="title" style="display: block; margin-bottom: 5px">Title:</label>
+		<main class="container mx-auto px-4 py-8">
+			<div class="bg-white shadow-md rounded-lg p-6 mb-8">
+				<h2 class="text-xl font-semibold mb-4">Submit a Bug Report</h2>
+				<form id="bugReportForm" class="space-y-4">
+					<div>
+						<label for="title" class="block text-sm font-medium text-gray-700">Title</label>
 						<input
 							type="text"
 							id="title"
 							name="title"
 							required
-							style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px"
+							class="mt-1 block w-full border border-gray-300 rounded-md p-2"
 						/>
 					</div>
-					<div style="margin-bottom: 15px">
-						<label for="description" style="display: block; margin-bottom: 5px">Description:</label>
+					<div>
+						<label for="description" class="block text-sm font-medium text-gray-700"
+							>Description</label
+						>
 						<textarea
 							id="description"
 							name="description"
+							rows="4"
 							required
-							style="
-								width: 100%;
-								height: 120px;
-								padding: 8px;
-								border: 1px solid #ddd;
-								border-radius: 4px;
-							"
+							class="mt-1 block w-full border border-gray-300 rounded-md p-2"
 						></textarea>
 					</div>
-					<div style="margin-bottom: 15px">
-						<label for="photos" style="display: block; margin-bottom: 5px">Photos (up to 3):</label>
+					<div>
+						<label class="block text-sm font-medium text-gray-700">Photos (Up to 3)</label>
 						<input
 							type="file"
 							id="photos"
 							name="photos"
 							multiple
 							accept="image/*"
-							style="width: 100%"
+							class="mt-1 block w-full"
 						/>
 					</div>
-					<div style="display: flex; justify-content: space-between">
-						<button
-							type="button"
-							id="cancelButton"
-							style="
-								padding: 8px 16px;
-								background-color: #f0f0f0;
-								border: 1px solid #ddd;
-								border-radius: 4px;
-								cursor: pointer;
-							"
-						>
-							Cancel
-						</button>
+					<div>
 						<button
 							type="submit"
-							style="
-								padding: 8px 16px;
-								background-color: #28a745;
-								color: white;
-								border: none;
-								border-radius: 4px;
-								cursor: pointer;
-							"
+							class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
 						>
-							Submit
+							Submit Report
 						</button>
 					</div>
 				</form>
 			</div>
-		</div>
 
-		<!-- Image Popup Modal -->
-		<div id="imagePopupOverlay" class="image-popup-overlay">
-			<div class="image-popup-content">
-				<button id="imagePopupClose" class="image-popup-close">×</button>
-				<img id="popupImage" src="" alt="Bug screenshot" />
+			<div class="bg-white shadow-md rounded-lg p-6">
+				<h2 class="text-xl font-semibold mb-4">View Bug Reports</h2>
+				<input
+					type="text"
+					id="search"
+					placeholder="Search reports"
+					class="block w-full p-2 border rounded mb-4"
+				/>
+				<div class="flex gap-2 mb-4">
+					<input
+						type="text"
+						id="datepicker"
+						placeholder="Select date"
+						class="block flex-grow p-2 border rounded"
+					/>
+					<button id="clearDate" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded">
+						Clear
+					</button>
+				</div>
+				<div id="reportsContainer" class="grid grid-cols-1 gap-4"></div>
 			</div>
+		</main>
+
+		<div id="imageModal" class="modal">
+			<img id="modalImg" src="" alt="Enlarged Image" />
 		</div>
 
 		<script>
-			// Global variables
-			const ITEMS_PER_PAGE = 5;
-			let currentPage = 1;
-			let totalPages = 1;
-			let allBugReports = [];
-			let filteredBugReports = [];
-			let searchTerm = "";
+			const urlParams = new URLSearchParams(window.location.search);
+			const PASSWORD = urlParams.get("password");
 
-			// DOM elements
-			const bugReportsContainer = document.getElementById("bugReportsContainer");
-			const paginationContainer = document.getElementById("pagination");
-			const searchInput = document.getElementById("searchInput");
-			const searchButton = document.getElementById("searchButton");
-			const submitBugButton = document.getElementById("submitBugButton");
-			const bugFormModal = document.getElementById("bugFormModal");
-			const bugForm = document.getElementById("bugForm");
-			const cancelButton = document.getElementById("cancelButton");
-			const imagePopupOverlay = document.getElementById("imagePopupOverlay");
-			const popupImage = document.getElementById("popupImage");
-			const imagePopupClose = document.getElementById("imagePopupClose");
-
-			// Fetch bug reports from the server
-			async function fetchBugReports() {
-				showLoading();
-				try {
-					let url = "/reports?sort=desc";
-					if (searchTerm) {
-						url += `&search=${encodeURIComponent(searchTerm)}`;
-					}
-					const response = await fetch(url);
-
-					if (!response.ok) {
-						throw new Error(`HTTP error! status: ${response.status}`);
-					}
-
-					allBugReports = await response.json();
-					filteredBugReports = [...allBugReports];
-					totalPages = Math.ceil(filteredBugReports.length / ITEMS_PER_PAGE);
-
-					displayBugReports();
-					updatePagination();
-				} catch (error) {
-					console.error("Error fetching bug reports:", error);
-					bugReportsContainer.innerHTML =
-						'<div class="error">Failed to load bug reports. Please try again later.</div>';
-				}
-			}
-
-			// Display bug reports for the current page
-			function displayBugReports() {
-				bugReportsContainer.innerHTML = "";
-
-				if (filteredBugReports.length === 0) {
-					bugReportsContainer.innerHTML = '<div class="no-results">No bug reports found.</div>';
-					return;
-				}
-
-				const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-				const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredBugReports.length);
-
-				for (let i = startIndex; i < endIndex; i++) {
-					const bug = filteredBugReports[i];
-					const bugReport = document.createElement("div");
-					bugReport.className = "bug-report";
-
-					// Format date
-					const date = new Date(bug.timestamp);
-					const formattedDate = date.toLocaleString();
-
-					// Create HTML for bug report
-					bugReport.innerHTML = `
-          <div class="bug-title">${bug.title}</div>
-          <div class="bug-timestamp">Submitted on ${formattedDate}</div>
-          <div class="bug-description">${bug.description}</div>
-          <div class="bug-images">
-            ${bug.photos.map((photo) => `<img src="${photo}" alt="Bug screenshot">`).join("")}
-          </div>
-          <textarea class="bug-area">${bug.logs}</textarea>
-        `;
-
-					bugReportsContainer.appendChild(bugReport);
-				}
-
-				// Add click event listeners to all images
-				addImageClickListeners();
-			}
-
-			// Add click event listeners to all bug images
-			function addImageClickListeners() {
-				const images = document.querySelectorAll(".bug-images img");
-				images.forEach((img) => {
-					img.addEventListener("click", function () {
-						openImagePopup(this.src);
-					});
+			document.addEventListener("DOMContentLoaded", function () {
+				let picker = flatpickr("#datepicker", {
+					dateFormat: "Y-m-d",
+					onChange: function (selectedDates) {
+						let firstDate = selectedDates[0];
+						fetchReports({ date: firstDate.toISOString().split("T")[0] });
+					},
 				});
-			}
 
-			// Open image popup
-			function openImagePopup(imageSrc) {
-				popupImage.src = imageSrc;
-				imagePopupOverlay.style.display = "flex";
-				document.body.style.overflow = "hidden"; // Prevent scrolling when popup is open
-			}
+				document.getElementById("clearDate").addEventListener("click", function () {
+					picker.clear();
+					fetchReports({});
+				});
 
-			// Close image popup
-			function closeImagePopup() {
-				imagePopupOverlay.style.display = "none";
-				document.body.style.overflow = ""; // Restore scrolling
-			}
+				document.getElementById("search").addEventListener("input", function () {
+					fetchReports({ search: this.value.trim() });
+				});
 
-			// Update pagination controls
-			function updatePagination() {
-				paginationContainer.innerHTML = "";
+				document.getElementById("bugReportForm").addEventListener("submit", function (e) {
+					e.preventDefault();
+					submitBugReport();
+				});
 
-				if (totalPages <= 1) {
-					return;
-				}
+				// Start with no query parameters
+				fetchReports({});
+			});
 
-				// Previous button
-				if (currentPage > 1) {
-					const prevButton = document.createElement("button");
-					prevButton.textContent = "Previous";
-					prevButton.addEventListener("click", () => {
-						currentPage--;
-						displayBugReports();
-						updatePagination();
-						window.scrollTo(0, 0);
-					});
-					paginationContainer.appendChild(prevButton);
-				}
+			function fetchReports(params) {
+				params.PASSWORD = PASSWORD;
+				const queryParams = new URLSearchParams(params);
 
-				// Page buttons
-				for (let i = 1; i <= totalPages; i++) {
-					const pageButton = document.createElement("button");
-					pageButton.textContent = i;
-
-					if (i === currentPage) {
-						pageButton.classList.add("active");
+				fetch(`/reports?${queryParams}`)
+					.then((response) => response.json())
+					.then((data) => {
+						const container = document.getElementById("reportsContainer");
+						container.innerHTML = data
+							.map(
+								(report) => `
+        <div class="bg-white p-4 shadow rounded">
+          <div class="flex justify-between items-start mb-2">
+            <h3 class="font-bold">${report.title}</h3>
+            <button 
+              onclick="blockReport('${report.userIP}')" 
+              class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-sm rounded"
+            >
+              Block
+            </button>
+          </div>
+          <p class="mt-2">${report.description}</p>
+          <div class="flex flex-row gap-2 mt-2">
+            ${report.photos
+							.map(
+								(photo) =>
+									`<img src="${photo}" class="w-24 h-24 object-cover cursor-pointer" onclick="showImage('${photo}')">`
+							)
+							.join("")}
+          </div>
+          ${
+						report.logs
+							? `
+            <div class="mt-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Logs</label>
+              <textarea class="w-full h-64 p-2 border rounded-md font-mono text-sm" readonly>${report.logs}</textarea>
+            </div>
+          `
+							: ""
 					}
-
-					pageButton.addEventListener("click", () => {
-						currentPage = i;
-						displayBugReports();
-						updatePagination();
-						window.scrollTo(0, 0);
+          <small class="block mt-2 text-gray-500">${new Date(
+						report.timestamp
+					).toLocaleString()}</small>
+        </div>
+      `
+							)
+							.join("");
 					});
+			}
 
-					paginationContainer.appendChild(pageButton);
+			// Add this new function after fetchReports
+			function blockReport(userIP) {
+				if (confirm("Are you sure you want to block this report?")) {
+					fetch(`/deletereports?PASSWORD=${PASSWORD}&userIP=${userIP}`, {
+						method: "DELETE",
+					})
+						.then((response) => {
+							if (!response.ok) {
+								throw new Error("Access Denied");
+							}
+							return response.text();
+						})
+						.then(() => {
+							alert("Report blocked successfully");
+							fetchReports({}); // Refresh the reports list
+						})
+						.catch((error) => {
+							console.error("Error:", error);
+							alert("Failed to block report: " + error.message);
+						});
 				}
+			}
 
-				// Next button
-				if (currentPage < totalPages) {
-					const nextButton = document.createElement("button");
-					nextButton.textContent = "Next";
-					nextButton.addEventListener("click", () => {
-						currentPage++;
-						displayBugReports();
-						updatePagination();
-						window.scrollTo(0, 0);
+			function submitBugReport() {
+				const form = document.getElementById("bugReportForm");
+				const formData = new FormData(form);
+				fetch("/report", {
+					method: "POST",
+					body: formData,
+				})
+					.then((response) => response.json())
+					.then((data) => {
+						alert(data.message);
+						if (!data.message.includes("duplicate")) {
+							form.reset();
+							fetchReports({ date: new Date().toISOString().split("T")[0] });
+						}
 					});
-					paginationContainer.appendChild(nextButton);
-				}
 			}
 
-			// Search function
-			function performSearch() {
-				searchTerm = searchInput.value.trim();
-				currentPage = 1;
-				fetchBugReports();
+			function showImage(src) {
+				document.getElementById("modalImg").src = src;
+				document.getElementById("imageModal").style.display = "flex";
 			}
 
-			// Show loading state
-			function showLoading() {
-				bugReportsContainer.innerHTML = '<div class="loading">Loading bug reports...</div>';
-			}
-
-			// Submit a new bug report
-			async function submitBugReport(event) {
-				event.preventDefault();
-
-				const formData = new FormData(bugForm);
-				const title = formData.get("title");
-				const description = formData.get("description");
-				const photos = document.getElementById("photos").files;
-
-				if (!title || !description) {
-					alert("Title and description are required.");
-					return;
-				}
-
-				// Remove old photos and add new ones
-				formData.delete("photos");
-				for (let i = 0; i < photos.length && i < 3; i++) {
-					formData.append("photos", photos[i]);
-				}
-
-				try {
-					const response = await fetch("/report", {
-						method: "POST",
-						body: formData,
-					});
-
-					if (!response.ok) {
-						const errorData = await response.json();
-						throw new Error(errorData.error || "Failed to submit bug report.");
-					}
-
-					const result = await response.json();
-
-					alert("Bug report submitted successfully!");
-					bugFormModal.style.display = "none";
-					bugForm.reset();
-					fetchBugReports();
-				} catch (error) {
-					console.error("Error submitting bug report:", error);
-					alert(error.message || "Failed to submit bug report. Please try again.");
-				}
-			}
-
-			// Event listeners
-			searchButton.addEventListener("click", performSearch);
-			searchInput.addEventListener("keypress", (e) => {
-				if (e.key === "Enter") {
-					performSearch();
-				}
-			});
-
-			submitBugButton.addEventListener("click", () => {
-				bugFormModal.style.display = "block";
-			});
-
-			cancelButton.addEventListener("click", () => {
-				bugFormModal.style.display = "none";
-				bugForm.reset();
-			});
-
-			bugForm.addEventListener("submit", submitBugReport);
-
-			window.addEventListener("click", (event) => {
-				if (event.target === bugFormModal) {
-					bugFormModal.style.display = "none";
-					bugForm.reset();
-				}
-
-				// Close image popup when clicking outside the image
-				if (event.target === imagePopupOverlay) {
-					closeImagePopup();
-				}
-			});
-
-			// Image popup close button
-			imagePopupClose.addEventListener("click", closeImagePopup);
-
-			// Add keyboard support for closing image popup with Escape key
-			document.addEventListener("keydown", (e) => {
-				if (e.key === "Escape" && imagePopupOverlay.style.display === "flex") {
-					closeImagePopup();
-				}
-			});
-
-			// Initialize the page
-			document.addEventListener("DOMContentLoaded", () => {
-				fetchBugReports();
+			document.getElementById("imageModal").addEventListener("click", function () {
+				this.style.display = "none";
 			});
 		</script>
 	</body>

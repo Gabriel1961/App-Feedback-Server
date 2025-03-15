@@ -1,141 +1,104 @@
 const express = require("express");
-const multer = require("multer");
-const fs = require("fs");
 const path = require("path");
-const sharp = require("sharp");
-const crypto = require("crypto");
-const {
-  STORAGE_DIR,
-  DATA_FILE,
-  SUBMISSION_COUNT_FILE,
-  UPLOADS_DIR_REL_PATH,
-  PASSWORD,
-  MAX_REPORTS_STORAGE_SIZE_GB
-} = require("./constants");
-
+const multer = require("multer");
 const router = express.Router();
-const MAX_STORAGE_SIZE = MAX_REPORTS_STORAGE_SIZE_GB * 1024 * 1024 * 1024;
+
+const { processImageAndStore, deleteImagesByIP, PHOTOS_DIR } = require("./db/imageStorage");
+const { tryCreateBugReport, queryBugReportsByDay, searchBugReports, queryBugReportsPages, removeBugReportsByUserIP, removeLogsByUserIP } = require("./db/storage");
+const {checkLimit} = require("./rateLimit")
 
 // Setup storage for uploaded images
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, UPLOADS_DIR_REL_PATH);
-  },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
-  },
+	destination: (req, file, cb) => {
+		cb(null, PHOTOS_DIR);
+	},
+	filename: (req, file, cb) => {
+		const idx = req.files ? req.files.length + 1 : 1; // Get the index based on the number of files uploaded
+		const ext = path.extname(file.originalname); // Get the file extension
+		cb(null, `$temp-${idx}${ext}`);
+	},
 });
+
 const upload = multer({ storage, limits: { files: 3 } });
 
-const loadBugs = () => {
-  if (fs.existsSync(DATA_FILE)) {
-    return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-  }
-  return [];
-};
+router.get("/reports", (req, res) => {
+	try {
+		const { search, date, PASSWORD } = req.query;
+    if (PASSWORD != process.env.INDEX_PASSWORD) 
+      return res.status(401).send("Access Denied: Invalid")
 
-const saveBugs = (bugs) => {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(bugs, null, 2));
-};
+		let reports;
 
-const loadSubmissionCounts = () => {
-  if (fs.existsSync(SUBMISSION_COUNT_FILE)) {
-    return JSON.parse(fs.readFileSync(SUBMISSION_COUNT_FILE, "utf8"));
-  }
-  return {};
-};
-
-const saveSubmissionCounts = (counts) => {
-  fs.writeFileSync(SUBMISSION_COUNT_FILE, JSON.stringify(counts, null, 2));
-};
-
-const generateReportHash = (title, description) => {
-  return crypto
-    .createHash('md5')
-    .update(`${title.toLowerCase().trim()}|${description.toLowerCase().trim()}`)
-    .digest('hex');
-};
-
-const isDuplicateReport = (title, description, reports) => {
-  const newHash = generateReportHash(title, description);
-  return reports.some(report => generateReportHash(report.title, report.description) === newHash);
-};
-
-const processImage = async (filePath) => {
-  try {
-    const tempOutputPath = path.join(
-      path.dirname(filePath),
-      `temp-${path.basename(filePath).replace(/\.[^/.]+$/, "")}.jpg`
-    );
-
-    await sharp(filePath)
-      .resize(2048, 2048, { fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 90 })
-      .toFile(tempOutputPath);
-
-    if (fs.existsSync(filePath)) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      fs.unlinkSync(filePath);
+		if (search) {
+			reports = searchBugReports(search);
+		} else if(date) {
+			reports = queryBugReportsByDay(date);
+		}
+    else {
+      const result = queryBugReportsPages(1, 20)
+      reports = result.reports
     }
 
-    const finalOutputPath = filePath.replace(/\.[^/.]+$/, ".jpg");
-    try {
-      fs.renameSync(tempOutputPath, finalOutputPath);
-    } catch (renameError) {
-      console.warn("Could not rename temp file:", renameError.message);
-      return tempOutputPath;
-    }
+		reports.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-    return finalOutputPath;
-  } catch (error) {
-    console.error("Error in image processing:", error);
-    return filePath;
-  }
-};
+		res.json(reports);
+	} catch (error) {
+		console.error("Error fetching bug reports:", error);
+		res.status(500).json({ error: "Failed to load bug reports." });
+	}
+});
 
-const getDirectorySize = (directoryPath) => {
-  let totalSize = 0;
-  fs.readdirSync(directoryPath).forEach(file => {
-    const filePath = path.join(directoryPath, file);
-    const stats = fs.statSync(filePath);
-    if (stats.isFile()) {
-      totalSize += stats.size;
-    }
-  });
-  return totalSize;
-};
+router.delete("/deletelogs", (req, res) => {
+  const { PASSWORD, userIP } = req.query;
+  if (PASSWORD != process.env.INDEX_PASSWORD) 
+    return res.status(401).send("Access Denied: Invalid")
+
+  removeLogsByUserIP(userIP)
+});
+
+router.delete("/deletereports", (req, res) => {
+  const { PASSWORD, userIP } = req.query;
+  if (PASSWORD != process.env.INDEX_PASSWORD) 
+    return res.status(401).send("Access Denied: Invalid")
+
+  removeBugReportsByUserIP(userIP)
+});
 
 router.post("/report", upload.array("photos", 3), async (req, res) => {
-  const { title, description, logs } = req.body;
-  const userIp = req.ip;
-  if (!title || !description || title.trim() === '' || description.trim() === '') {
-    return res.status(400).json({ error: "Title and description are required." });
-  }
+  if(checkLimit(req.ip,"reportBug") === false)
+    return res.status(429).json({error: "Too many requests, please try again later."})
 
-  let submissionCounts = loadSubmissionCounts();
-  if (submissionCounts[userIp] && submissionCounts[userIp] >= 10) {
-    return res.status(400).json({ error: "Submission limit reached." });
-  }
+	const { title, description, logs } = req.body;
+	if (!title || !description || title.trim() === "" || description.trim() === "") {
+		return res.status(400).json({ error: "Title and description are required." });
+	}
 
-  const bugReports = loadBugs();
-  if (isDuplicateReport(title, description, bugReports)) {
-    return res.status(400).json({ error: "Duplicate report." });
-  }
+	const photoPaths = req.files
+		? await Promise.all(
+				req.files.map((file, idx) =>
+					processImageAndStore(path.join(PHOTOS_DIR, file.filename), idx, req.ip)
+				)
+		  )
+		: [];
 
-  cleanupStorage();
-  const photoPaths = req.files ? await Promise.all(req.files.map(file => processImage(path.join(UPLOADS_DIR_REL_PATH, file.filename)))) : [];
+	const [success, newBug] = tryCreateBugReport(
+		title.trim(),
+		description.trim(),
+		logs,
+		photoPaths,
+		req.ip
+	);
 
-  const newBug = { id: Date.now(), title: title.trim(), description: description.trim(), logs, photos: photoPaths, timestamp: new Date(), reportHash: generateReportHash(title, description) };
-  bugReports.push(newBug);
-  saveBugs(bugReports);
 
-  submissionCounts[userIp] = (submissionCounts[userIp] || 0) + 1;
-  saveSubmissionCounts(submissionCounts);
-  res.json({ message: "Bug report submitted successfully!", bug: newBug });
+	if (success) {
+		res.json({ message: "Bug report submitted successfully!", bug: newBug });
+	} else {
+		deleteImagesByIP(req.ip);
+		res.json({ message: "Bug duplicate!" });
+	}
 });
 
 module.exports = {
-  bugReportRoutes:router,
-  getDirectorySize,
-  cleanupStorage
-}
+	bugReportRoutes: router,
+};
