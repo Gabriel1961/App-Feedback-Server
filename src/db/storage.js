@@ -111,7 +111,7 @@ function searchBugReports(query) {
 }
 
 // Create a log entry
-function createLog(title, trace, type, userIP) {
+function createLog(title, trace, type, count, userIP) {
 	const today = getTodayDate();
 	const filePath = path.join(LOGS_DIR, `${today}.json`);
 
@@ -125,13 +125,13 @@ function createLog(title, trace, type, userIP) {
 
 	if (existingLogIndex !== -1) {
 		// Update the existing log
-		logs[existingLogIndex].count += 1;
+		logs[existingLogIndex].count += count;
 		logs[existingLogIndex].lastLogTimestamp = new Date();
 	} else {
 		// Add a new log
 		logs.push({
 			lastLogTimestamp: new Date(),
-			count: 1,
+			count: count,
 			title: title,
 			trace: trace,
 			userIP: userIP,

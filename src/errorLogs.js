@@ -42,9 +42,9 @@ router.post("/log", async (req, res) => {
 
   let success = false
 	logs.forEach((element) => {
-		const { title, trace, type } = element;
+		const { title, trace, type, count } = element;
 		if (title && trace && type) {
-			createLog(title, trace, type, req.ip);
+			createLog(title, trace, type, count, req.ip);
       success = true
 		}
 	});

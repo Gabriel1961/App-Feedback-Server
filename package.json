@@ -4,7 +4,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev":"nodemon server.js --ext js"
+    "dev":"nodemon server.js --ext js",
+    "deploy":"nohup node server.js > output.log 2>&1 &"
   },
   "keywords": [],
   "author": "",
