@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Log Viewer</title>
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css"
+		/>
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css"
+		/>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+	</head>
+	<body class="bg-gray-100 min-h-screen">
+		<nav class="bg-blue-600 text-white shadow-lg">
+			<div class="container mx-auto px-4 py-3 flex justify-between items-center">
+				<h1 class="text-xl font-bold">Log Viewer</h1>
+				<a
+					onclick="window.location.href = `bugReports?password=${PASSWORD}`"
+					class="text-xl font-bold cursor-pointer"
+					>To Bug Reports</a
+				>
+			</div>
+		</nav>
+
+		<main class="container mx-auto px-4 py-8">
+			<!-- Log Entry Form -->
+			<div class="bg-white shadow-md rounded-lg p-6 mb-8">
+				<h2 class="text-xl font-semibold mb-4">Submit Log Entry</h2>
+				<form id="logForm" class="space-y-4">
+					<div>
+						<label class="block text-sm font-medium text-gray-700">Title</label>
+						<input
+							type="text"
+							name="title"
+							required
+							class="mt-1 block w-full border border-gray-300 rounded-md p-2"
+						/>
+					</div>
+					<div>
+						<label class="block text-sm font-medium text-gray-700">Stack Trace</label>
+						<textarea
+							name="trace"
+							rows="4"
+							required
+							class="mt-1 block w-full border border-gray-300 rounded-md p-2"
+						></textarea>
+					</div>
+					<div>
+						<label class="block text-sm font-medium text-gray-700">Type</label>
+						<select
+							name="type"
+							required
+							class="mt-1 block w-full border border-gray-300 rounded-md p-2"
+						>
+							<option value="error">Error</option>
+							<option value="warning">Warning</option>
+						</select>
+					</div>
+					<button
+						type="submit"
+						class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+					>
+						Submit Log
+					</button>
+				</form>
+			</div>
+
+			<!-- Log Viewer -->
+			<div class="bg-white shadow-md rounded-lg p-6">
+				<h2 class="text-xl font-semibold mb-4">View Logs</h2>
+
+				<!-- Filters -->
+				<div class="space-y-4 mb-6">
+					<input
+						type="text"
+						id="search"
+						placeholder="Search logs..."
+						class="block w-full border border-gray-300 rounded-md p-2"
+					/>
+
+					<div class="flex gap-4">
+						<div class="flex-1">
+							<label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+							<input
+								type="text"
+								id="endDate"
+								placeholder="Select end date..."
+								class="w-full border border-gray-300 rounded-md p-2"
+							/>
+						</div>
+						<div class="flex-1">
+							<label class="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+							<select id="dateRange" class="w-full border border-gray-300 rounded-md p-2">
+								<option value="1">Last 24 hours</option>
+								<option value="7">Last 7 days</option>
+							</select>
+						</div>
+						<div class="flex-1">
+							<label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+							<select id="typeFilter" class="w-full border border-gray-300 rounded-md p-2">
+								<option value="error">Error</option>
+								<option value="warning">Warning</option>
+							</select>
+						</div>
+					</div>
+				</div>
+
+				<!-- Logs Display -->
+				<div id="logsContainer" class="space-y-4"></div>
+			</div>
+		</main>
+
+		<script>
+			const urlParams = new URLSearchParams(window.location.search);
+			const PASSWORD = urlParams.get("password");
+
+			// Add after document.addEventListener("DOMContentLoaded", function () {
+			flatpickr("#endDate", {
+				dateFormat: "Y-m-d",
+				defaultDate: new Date(),
+        value: new Date(),
+				onChange: fetchLogs,
+			});
+
+			document.addEventListener("DOMContentLoaded", function () {
+				// Event listeners
+				document.getElementById("search").addEventListener("input", fetchLogs);
+				document.getElementById("dateRange").addEventListener("change", fetchLogs);
+				document.getElementById("typeFilter").addEventListener("change", fetchLogs);
+				document.getElementById("logForm").addEventListener("submit", submitLog);
+
+				// Initial fetch
+				fetchLogs();
+			});
+
+			function fetchLogs() {
+				const search = document.getElementById("search").value;
+				const type = document.getElementById("typeFilter").value;
+				const days = document.getElementById("dateRange").value;
+				const dateEnd = new Date(document.getElementById("endDate").value);
+
+				const dateStart = new Date(dateEnd);
+				dateStart.setDate(dateStart.getDate() - parseInt(days));
+
+				const params = new URLSearchParams({
+					PASSWORD,
+					dateStart: dateStart.toISOString(),
+					dateEnd: dateEnd.toISOString(),
+				});
+
+				if (search) params.append("search", search);
+				if (type) params.append("type", type);
+
+				fetch(`/logs?${params}`)
+					.then((response) => response.json())
+					.then((logs) => {
+						const container = document.getElementById("logsContainer");
+						container.innerHTML = logs
+							.map(
+								(log) => `
+                        <div class="border rounded-lg p-4 ${
+													log.type === "error" ? "border-red-300" : "border-yellow-300"
+												}">
+                            <div class="flex justify-between items-start mb-2">
+                                <h3 class="font-bold">${log.title}</h3>
+                                <span class="px-2 py-1 rounded text-sm ${
+																	log.type === "error"
+																		? "bg-red-100 text-red-800"
+																		: "bg-yellow-100 text-yellow-800"
+																}">${log.count} occurrences</span>
+                            </div>
+                            <textarea class="w-full h-32 p-2 border rounded-md font-mono text-sm bg-gray-50" readonly>${
+															log.trace
+														}</textarea>
+                            <div class="mt-2 text-sm text-gray-500">
+                                Last occurrence: ${new Date(log.lastLogTimestamp).toLocaleString()}
+                            </div>
+                        </div>
+                    `
+							)
+							.join("");
+					});
+			}
+
+			function submitLog(e) {
+				e.preventDefault();
+				const formData = new FormData(e.target);
+				const logs = [
+					{
+						title: formData.get("title"),
+						trace: formData.get("trace"),
+						type: formData.get("type"),
+					},
+				];
+
+				fetch("/log", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({ logs }),
+				})
+					.then((response) => response.json())
+					.then((data) => {
+						alert(data.message);
+						if (!data.message.includes("duplicate")) {
+							e.target.reset();
+							fetchLogs();
+						}
+					});
+			}
+		</script>
+	</body>
+</html>

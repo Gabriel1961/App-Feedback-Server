@@ -120,7 +120,7 @@ function createLog(title, trace, type, userIP) {
 		logs = JSON.parse(fs.readFileSync(filePath, "utf-8"));
 	}
 
-	const hash = generateHash(title, trace);
+	const hash = generateHash(title, trace, type);
 	const existingLogIndex = logs.findIndex((l) => l.hash === hash);
 
 	if (existingLogIndex !== -1) {
@@ -144,18 +144,39 @@ function createLog(title, trace, type, userIP) {
 }
 
 // Query logs by day
-function queryLogsByDay(date) {
-	const filePath = path.join(LOGS_DIR, `${date}.json`);
+function queryLogsByDay(startDate, endDate) {
+	const start = new Date(startDate);
+	const end = new Date(endDate == null ? startDate : endDate);
+	const files = fs.readdirSync(LOGS_DIR);
+	const logMap = new Map(); // Use a Map to efficiently track logs by hash
 
-	if (fs.existsSync(filePath)) {
-		return JSON.parse(fs.readFileSync(filePath, "utf-8"));
-	}
+	files.forEach((file) => {
+		const fileDate = new Date(file.split(".")[0]);
+		if (fileDate >= start && fileDate <= end) {
+			const filePath = path.join(LOGS_DIR, file);
+			const logs = JSON.parse(fs.readFileSync(filePath, "utf-8"));
 
-	return [];
+			logs.forEach((log) => {
+				if (logMap.has(log.hash)) {
+					// Update existing log entry
+					const existingLog = logMap.get(log.hash);
+					existingLog.count += log.count;
+					if (new Date(log.lastLogTimestamp) > new Date(existingLog.lastLogTimestamp)) {
+						existingLog.lastLogTimestamp = log.lastLogTimestamp;
+					}
+				} else {
+					// Add new log entry
+					logMap.set(log.hash, { ...log });
+				}
+			});
+		}
+	});
+
+	return Array.from(logMap.values());
 }
 
 // Search logs by title and stack trace
-function searchLogs(query) {
+function searchLogs(query, type) {
 	const files = fs.readdirSync(LOGS_DIR);
 	const results = [];
 	const lowerCaseQuery = query.toLowerCase();
@@ -166,8 +187,9 @@ function searchLogs(query) {
 
 		logs.forEach((log) => {
 			if (
-				log.title.toLowerCase().includes(lowerCaseQuery) ||
-				log.trace.toLowerCase().includes(lowerCaseQuery)
+				log.type === type &&
+				(log.title.toLowerCase().includes(lowerCaseQuery) ||
+					log.trace.toLowerCase().includes(lowerCaseQuery))
 			) {
 				results.push(log);
 			}
@@ -277,5 +299,5 @@ module.exports = {
 	removeLogsByUserIP,
 	removeBugReportsByUserIP,
 	getTodayDate,
-	queryBugReportsPages
+	queryBugReportsPages,
 };

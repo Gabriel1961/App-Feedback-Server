@@ -49,13 +49,6 @@ router.get("/reports", (req, res) => {
 	}
 });
 
-router.delete("/deletelogs", (req, res) => {
-  const { PASSWORD, userIP } = req.query;
-  if (PASSWORD != process.env.INDEX_PASSWORD) 
-    return res.status(401).send("Access Denied: Invalid")
-
-  removeLogsByUserIP(userIP)
-});
 
 router.delete("/deletereports", (req, res) => {
   const { PASSWORD, userIP } = req.query;
@@ -94,7 +87,6 @@ router.post("/report", upload.array("photos", 3), async (req, res) => {
 	if (success) {
 		res.json({ message: "Bug report submitted successfully!", bug: newBug });
 	} else {
-		deleteImagesByIP(req.ip);
 		res.json({ message: "Bug duplicate!" });
 	}
 });
