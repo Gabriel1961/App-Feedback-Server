@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { deleteImagesByIP } = require("./imageStorage");
 
 // Helper function to generate a hash
 function generateHash(...args) {
@@ -260,6 +261,8 @@ function queryBugReportsPages(page = 1, reportsPerPage = 10) {
 // Remove bug reports by userIP
 function removeBugReportsByUserIP(userIP) {
 	const files = fs.readdirSync(BUG_REPORTS_DIR);
+
+	deleteImagesByIP(userIP);	
 
 	files.forEach((file) => {
 		const filePath = path.join(BUG_REPORTS_DIR, file);

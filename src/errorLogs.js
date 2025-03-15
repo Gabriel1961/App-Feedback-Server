@@ -6,10 +6,16 @@ const { createLog, searchLogs, removeLogsByUserIP, queryLogsByDay } = require(".
 const { checkLimit } = require("./rateLimit");
 
 router.delete("/deletelogs", (req, res) => {
-	const { PASSWORD, userIP } = req.query;
-	if (PASSWORD != process.env.INDEX_PASSWORD) return res.status(401).send("Access Denied: Invalid");
+	try{
 
-	removeLogsByUserIP(userIP);
+		const { PASSWORD, userIP } = req.query;
+		if (PASSWORD != process.env.INDEX_PASSWORD) return res.status(401).send("Access Denied: Invalid");
+		
+		removeLogsByUserIP(userIP);
+	} catch (error) {
+		console.error("Error deleting logs:", error);
+		res.status(500).json({ error: "Failed to delete logs." });
+	}
 });
 
 router.get("/logs", (req, res) => {
@@ -35,21 +41,27 @@ router.get("/logs", (req, res) => {
 });
 
 router.post("/log", async (req, res) => {
-	if (checkLimit(req.ip, "reportLogs") === false)
-		return res.status(429).json({ error: "Too many requests, please try again later." });
+	try{
 
-	const { logs } = req.body;
-
-  let success = false
-	logs.forEach((element) => {
-		const { title, trace, type, count } = element;
-		if (title && trace && type) {
-			createLog(title, trace, type, count, req.ip);
-      success = true
-		}
-	});
-
-	res.json({ success });
+		if (checkLimit(req.ip, "reportLogs") === false)
+			return res.status(429).json({ error: "Too many requests, please try again later." });
+		
+		const { logs } = req.body;
+		
+		let success = false
+		logs.forEach((element) => {
+			const { title, trace, type, count } = element;
+			if (title && trace && type) {
+				createLog(title, trace, type, count, req.ip);
+				success = true
+			}
+		});
+		
+		res.json({ success });
+	} catch (error) {
+		console.error("Error creating log:", error);
+		res.status(500).json({ error: "Failed to create log." });
+	}
 });
 
 module.exports = {
