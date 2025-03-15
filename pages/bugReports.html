@@ -123,8 +123,10 @@
 				let picker = flatpickr("#datepicker", {
 					dateFormat: "Y-m-d",
 					onChange: function (selectedDates) {
-						let firstDate = selectedDates[0];
-						fetchReports({ date: firstDate.toISOString().split("T")[0] });
+						let firstDate = selectedDates[0];  new Date().timestamp
+						const offset = firstDate.getTimezoneOffset();
+						const correctedDate = new Date(firstDate.getTime() - offset * 60000); 
+						fetchReports({ date: correctedDate.toISOString().split("T")[0] });
 					},
 				});
 
