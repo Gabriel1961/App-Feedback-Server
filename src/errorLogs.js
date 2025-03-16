@@ -47,6 +47,8 @@ router.post("/log", async (req, res) => {
 			return res.status(429).json({ error: "Too many requests, please try again later." });
 		
 		const { logs } = req.body;
+
+		console.log(logs);
 		
 		let success = false
 		logs.forEach((element) => {
