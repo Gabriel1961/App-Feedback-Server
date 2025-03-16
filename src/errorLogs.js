@@ -31,7 +31,8 @@ router.get("/logs", (req, res) => {
       logs = queryLogsByDay(dateStart, dateEnd);
 		}
     
-    logs.sort((a, b) => b.count - a.count);
+		// sort by number of occurrences in users 
+    logs.sort((a, b) => b.userIPs.length - a.userIPs.length);
     
 		res.json(logs.filter((log) => log.type === type));
 	} catch (error) {
@@ -48,13 +49,11 @@ router.post("/log", async (req, res) => {
 		
 		const { logs } = req.body;
 
-		console.log(logs);
-		
 		let success = false
 		logs.forEach((element) => {
 			const { title, trace, type, count } = element;
 			if (title && trace && type) {
-				createLog(title, trace, type, count, req.ip);
+				createLog(title, trace, type, count || 1, req.ip);
 				success = true
 			}
 		});

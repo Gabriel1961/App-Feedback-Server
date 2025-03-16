@@ -39,6 +39,116 @@ if (!fs.existsSync(LOGS_DIR)) {
 ensureDirectoryExists(BUG_REPORTS_DIR);
 ensureDirectoryExists(LOGS_DIR);
 
+// Create a log entry
+function createLog(title, trace, type, count, userIP) {
+	const today = getTodayDate();
+	const filePath = path.join(LOGS_DIR, `${today}.json`);
+
+	let logs = [];
+	if (fs.existsSync(filePath)) {
+		logs = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+	}
+
+	const hash = generateHash(title, trace, type);
+	const existingLogIndex = logs.findIndex((l) => l.hash === hash);
+
+	if (existingLogIndex !== -1) {
+		// Update the existing log
+		logs[existingLogIndex].count += count;
+		logs[existingLogIndex].lastLogTimestamp = new Date();
+		if (!logs[existingLogIndex].userIPs.includes(userIP)) {
+			logs[existingLogIndex].userIPs.push(userIP);
+		}
+	} else {
+		// Add a new log
+		logs.push({
+			lastLogTimestamp: new Date(),
+			count: count,
+			title: title,
+			trace: trace,
+			userIPs: [userIP],
+			type: type,
+			hash: hash,
+		});
+	}
+
+	fs.writeFileSync(filePath, JSON.stringify(logs, null, 2));
+}
+
+// Query logs by day
+function queryLogsByDay(startDate, endDate) {
+	const start = new Date(startDate);
+	const end = new Date(endDate == null ? startDate : endDate);
+	const files = fs.readdirSync(LOGS_DIR);
+	const logMap = new Map(); // Use a Map to efficiently track logs by hash
+
+	files.forEach((file) => {
+		const fileDate = new Date(file.split(".")[0]);
+		if (fileDate >= start && fileDate <= end) {
+			const filePath = path.join(LOGS_DIR, file);
+			const logs = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+
+			logs.forEach((log) => {
+				if (logMap.has(log.hash)) {
+					// Update existing log entry
+					const existingLog = logMap.get(log.hash);
+					existingLog.count += log.count;
+					if (new Date(log.lastLogTimestamp) > new Date(existingLog.lastLogTimestamp)) {
+						existingLog.lastLogTimestamp = log.lastLogTimestamp;
+					}
+					// Union userIPs
+					existingLog.userIPs = Array.from(new Set([...existingLog.userIPs, ...log.userIPs]));
+				} else {
+					// Add new log entry
+					logMap.set(log.hash, { ...log });
+				}
+			});
+		}
+	});
+
+	return Array.from(logMap.values());
+}
+
+// Search logs by title and stack trace
+function searchLogs(query, type) {
+	const files = fs.readdirSync(LOGS_DIR);
+	const results = [];
+	const lowerCaseQuery = query.toLowerCase();
+
+	files.forEach((file) => {
+		const filePath = path.join(LOGS_DIR, file);
+		const logs = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+
+		logs.forEach((log) => {
+			if (
+				log.type === type &&
+				(log.title.toLowerCase().includes(lowerCaseQuery) ||
+					log.trace.toLowerCase().includes(lowerCaseQuery))
+			) {
+				results.push(log);
+			}
+		});
+	});
+
+	return results;
+}
+
+// Remove logs by userIP
+function removeLogsByUserIP(userIP) {
+	const files = fs.readdirSync(LOGS_DIR);
+
+	files.forEach((file) => {
+		const filePath = path.join(LOGS_DIR, file);
+		let logs = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+
+		// Filter out logs with the specified userIP
+		logs = logs.filter((log) => log.userIP !== userIP);
+
+		// Write the updated logs back to the file
+		fs.writeFileSync(filePath, JSON.stringify(logs, null, 2));
+	});
+}
+
 // Try to create a bug report, checking for duplicates on the same day
 function tryCreateBugReport(title, description, logs, photos, userIP) {
 	const today = getTodayDate();
@@ -104,95 +214,6 @@ function searchBugReports(query) {
 				report.description.toLowerCase().includes(lowerCaseQuery)
 			) {
 				results.push(report);
-			}
-		});
-	});
-
-	return results;
-}
-
-// Create a log entry
-function createLog(title, trace, type, count, userIP) {
-	const today = getTodayDate();
-	const filePath = path.join(LOGS_DIR, `${today}.json`);
-
-	let logs = [];
-	if (fs.existsSync(filePath)) {
-		logs = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-	}
-
-	const hash = generateHash(title, trace, type);
-	const existingLogIndex = logs.findIndex((l) => l.hash === hash);
-
-	if (existingLogIndex !== -1) {
-		// Update the existing log
-		logs[existingLogIndex].count += count;
-		logs[existingLogIndex].lastLogTimestamp = new Date();
-	} else {
-		// Add a new log
-		logs.push({
-			lastLogTimestamp: new Date(),
-			count: count,
-			title: title,
-			trace: trace,
-			userIP: userIP,
-			type: type,
-			hash: hash,
-		});
-	}
-
-	fs.writeFileSync(filePath, JSON.stringify(logs, null, 2));
-}
-
-// Query logs by day
-function queryLogsByDay(startDate, endDate) {
-	const start = new Date(startDate);
-	const end = new Date(endDate == null ? startDate : endDate);
-	const files = fs.readdirSync(LOGS_DIR);
-	const logMap = new Map(); // Use a Map to efficiently track logs by hash
-
-	files.forEach((file) => {
-		const fileDate = new Date(file.split(".")[0]);
-		if (fileDate >= start && fileDate <= end) {
-			const filePath = path.join(LOGS_DIR, file);
-			const logs = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-
-			logs.forEach((log) => {
-				if (logMap.has(log.hash)) {
-					// Update existing log entry
-					const existingLog = logMap.get(log.hash);
-					existingLog.count += log.count;
-					if (new Date(log.lastLogTimestamp) > new Date(existingLog.lastLogTimestamp)) {
-						existingLog.lastLogTimestamp = log.lastLogTimestamp;
-					}
-				} else {
-					// Add new log entry
-					logMap.set(log.hash, { ...log });
-				}
-			});
-		}
-	});
-
-	return Array.from(logMap.values());
-}
-
-// Search logs by title and stack trace
-function searchLogs(query, type) {
-	const files = fs.readdirSync(LOGS_DIR);
-	const results = [];
-	const lowerCaseQuery = query.toLowerCase();
-
-	files.forEach((file) => {
-		const filePath = path.join(LOGS_DIR, file);
-		const logs = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-
-		logs.forEach((log) => {
-			if (
-				log.type === type &&
-				(log.title.toLowerCase().includes(lowerCaseQuery) ||
-					log.trace.toLowerCase().includes(lowerCaseQuery))
-			) {
-				results.push(log);
 			}
 		});
 	});
@@ -276,21 +297,6 @@ function removeBugReportsByUserIP(userIP) {
 	});
 }
 
-// Remove logs by userIP
-function removeLogsByUserIP(userIP) {
-	const files = fs.readdirSync(LOGS_DIR);
-
-	files.forEach((file) => {
-		const filePath = path.join(LOGS_DIR, file);
-		let logs = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-
-		// Filter out logs with the specified userIP
-		logs = logs.filter((log) => log.userIP !== userIP);
-
-		// Write the updated logs back to the file
-		fs.writeFileSync(filePath, JSON.stringify(logs, null, 2));
-	});
-}
 
 module.exports = {
 	queryBugReportsByDay,
