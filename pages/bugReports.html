@@ -31,13 +31,91 @@
 				max-width: 90%;
 				max-height: 90%;
 			}
+			.log-item {
+				border-left: 4px solid #ccc;
+				margin-bottom: 10px;
+				padding-left: 10px;
+			}
+			.log-error {
+				border-left-color: #f56565;
+			}
+			.log-warning {
+				border-left-color: #ed8936;
+			}
+			.log-info {
+				border-left-color: #4299e1;
+			}
+			.logs-wrapper {
+				display: none; /* Hide logs by default */
+			}
+			.log-trace {
+				font-family: monospace;
+				font-size: 0.85rem;
+				white-space: pre-wrap;
+				background-color: #f7fafc;
+				padding: 8px;
+				border-radius: 4px;
+				margin-top: 4px;
+				display: none; /* Hide by default */
+			}
+			.log-count {
+				display: inline-block;
+				background-color: #e2e8f0;
+				border-radius: 9999px;
+				padding: 2px 8px;
+				font-size: 0.75rem;
+				margin-left: 8px;
+			}
+			.log-title {
+				cursor: pointer;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+			}
+			.log-title:hover {
+				background-color: #f7fafc;
+			}
+			.log-title::after {
+				content: "▼";
+				font-size: 0.75rem;
+				color: #718096;
+			}
+			.log-title.open::after {
+				content: "▲";
+			}
+			.filter-badge {
+				display: inline-flex;
+				align-items: center;
+				background-color: #e2e8f0;
+				border-radius: 9999px;
+				padding: 2px 8px;
+				font-size: 0.75rem;
+				margin-right: 8px;
+				cursor: pointer;
+			}
+			.filter-badge.active {
+				background-color: #4299e1;
+				color: white;
+			}
+			.filter-badge.error {
+				background-color: #f56565;
+				color: white;
+			}
+			.filter-badge.warning {
+				background-color: #ed8936;
+				color: white;
+			}
 		</style>
 	</head>
 	<body class="bg-gray-100 min-h-screen">
 		<nav class="bg-blue-600 text-white shadow-lg">
 			<div class="container mx-auto px-4 py-3 flex justify-between items-center">
 				<h1 class="text-xl font-bold">Bug Reporting System</h1>
-				<a onclick="window.location.href = `logReports?password=${PASSWORD}`" class="text-xl font-bold cursor-pointer">To Logs</a>
+				<a
+					onclick="window.location.href = `logReports?password=${PASSWORD}`"
+					class="text-xl font-bold cursor-pointer"
+					>To Logs</a
+				>
 			</div>
 		</nav>
 
@@ -124,9 +202,9 @@
 				let picker = flatpickr("#datepicker", {
 					dateFormat: "Y-m-d",
 					onChange: function (selectedDates) {
-						let firstDate = selectedDates[0];  new Date().timestamp
+						let firstDate = selectedDates[0];
 						const offset = firstDate.getTimezoneOffset();
-						const correctedDate = new Date(firstDate.getTime() - offset * 60000); 
+						const correctedDate = new Date(firstDate.getTime() - offset * 60000);
 						fetchReports({ date: correctedDate.toISOString().split("T")[0] });
 					},
 				});
@@ -147,7 +225,136 @@
 
 				// Start with no query parameters
 				fetchReports({});
+
+				// Add global event listener for logs
+				document.addEventListener("click", function (e) {
+					// Handle log title clicks
+					if (e.target.closest(".log-title")) {
+						const logItem = e.target.closest(".log-item");
+						const logTrace = logItem.querySelector(".log-trace");
+						const logTitle = logItem.querySelector(".log-title");
+
+						if (logTrace.style.display === "block") {
+							logTrace.style.display = "none";
+							logTitle.classList.remove("open");
+						} else {
+							logTrace.style.display = "block";
+							logTitle.classList.add("open");
+						}
+					}
+
+					// Handle filter clicks
+					if (e.target.closest(".filter-badge")) {
+						const badge = e.target.closest(".filter-badge");
+						const filterType = badge.dataset.type;
+						const logContainer = badge.closest(".logs-container");
+
+						// Toggle active state
+						badge.classList.toggle("active");
+
+						// Get all active filters
+						const activeFilters = Array.from(
+							logContainer.querySelectorAll(".filter-badge.active")
+						).map((el) => el.dataset.type);
+
+						// Show/hide logs based on filters
+						const logItems = logContainer.querySelectorAll(".log-item");
+						logItems.forEach((item) => {
+							if (activeFilters.length === 0 || activeFilters.includes(item.dataset.type)) {
+								item.style.display = "block";
+							} else {
+								item.style.display = "none";
+							}
+						});
+					}
+				});
 			});
+
+			function formatLogs(logsString) {
+				try {
+					// Parse the JSON string
+					const logsData = JSON.parse(logsString);
+
+					if (!logsData.logs || !Array.isArray(logsData.logs)) {
+						return `<div class="text-red-500">Invalid log format</div>`;
+					}
+
+					// Count each type of log
+					const errorCount = logsData.logs.filter((log) => log.type === "error").length;
+					const warningCount = logsData.logs.filter((log) => log.type === "warning").length;
+					const infoCount = logsData.logs.filter((log) => log.type === "info" || !log.type).length;
+
+					return `
+      <div class="mt-2 logs-container">
+        <div class="flex justify-between items-center p-2 bg-gray-100 rounded-md cursor-pointer" onclick="toggleLogsVisibility(this)">
+          <label class="block text-sm font-medium text-gray-700">Logs (${
+						logsData.logs.length
+					})</label>
+          <div class="flex items-center">
+            ${
+							errorCount > 0
+								? `<span class="mr-2 px-2 py-1 bg-red-500 text-white text-xs rounded-full">${errorCount}</span>`
+								: ""
+						}
+            ${
+							warningCount > 0
+								? `<span class="mr-2 px-2 py-1 bg-orange-500 text-white text-xs rounded-full">${warningCount}</span>`
+								: ""
+						}
+            <span class="toggle-icon">▼</span>
+          </div>
+        </div>
+        <div class="logs-wrapper border rounded-md p-4 bg-white mt-2">
+          <div class="flex justify-end mb-2">
+            <span class="filter-badge" data-type="all">All (${logsData.logs.length})</span>
+            ${
+							errorCount > 0
+								? `<span class="filter-badge error" data-type="error">Errors (${errorCount})</span>`
+								: ""
+						}
+            ${
+							warningCount > 0
+								? `<span class="filter-badge warning" data-type="warning">Warnings (${warningCount})</span>`
+								: ""
+						}
+            ${
+							infoCount > 0
+								? `<span class="filter-badge" data-type="info">Info (${infoCount})</span>`
+								: ""
+						}
+          </div>
+          ${logsData.logs
+						.map((log) => {
+							const typeClass =
+								log.type === "error"
+									? "log-error"
+									: log.type === "warning"
+									? "log-warning"
+									: "log-info";
+							return `
+              <div class="log-item ${typeClass}" data-type="${log.type || "info"}">
+                <div class="log-title font-medium p-2">
+                  <span>${log.title}</span>
+                  ${log.count > 1 ? `<span class="log-count">${log.count}×</span>` : ""}
+                </div>
+                <div class="log-trace">${log.trace}</div>
+              </div>
+            `;
+						})
+						.join("")}
+        </div>
+      </div>
+    `;
+				} catch (e) {
+					console.error("Error parsing logs:", e);
+					return `
+      <div class="mt-2">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Logs (Raw)</label>
+        <textarea class="w-full h-64 p-2 border rounded-md font-mono text-sm" readonly>${logsString}</textarea>
+      </div>
+    `;
+				}
+			}
 
 			function fetchReports(params) {
 				params.PASSWORD = PASSWORD;
@@ -179,16 +386,7 @@
 							)
 							.join("")}
           </div>
-          ${
-						report.logs
-							? `
-            <div class="mt-2">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Logs</label>
-              <textarea class="w-full h-64 p-2 border rounded-md font-mono text-sm" readonly>${report.logs}</textarea>
-            </div>
-          `
-							: ""
-					}
+          ${report.logs ? formatLogs(report.logs) : ""}
           <small class="block mt-2 text-gray-500">${new Date(
 						report.timestamp
 					).toLocaleString()}</small>
@@ -197,6 +395,19 @@
 							)
 							.join("");
 					});
+			}
+
+			function toggleLogsVisibility(element) {
+				const logsWrapper = element.nextElementSibling;
+				const toggleIcon = element.querySelector(".toggle-icon");
+
+				if (logsWrapper.style.display === "block") {
+					logsWrapper.style.display = "none";
+					toggleIcon.textContent = "▼";
+				} else {
+					logsWrapper.style.display = "block";
+					toggleIcon.textContent = "▲";
+				}
 			}
 
 			// Add this new function after fetchReports
